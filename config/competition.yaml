@@ -22,13 +22,13 @@ training:
   run_name: yolov8n_baseline
   run_description: Baseline YOLOv8n from latest 3LC train/val revisions
   epochs: 10
-  batch_size: 16
+  batch_size: 8
   image_size: 640
-  device: 0
-  workers: 2
+  device: cpu ## for gpu use : "0", with comma
+  workers: 8
   lr0: 0.01
   patience: 20
-  use_augmentation: true
+  use_augmentation: false
   exist_ok: true
 
 reproducibility:

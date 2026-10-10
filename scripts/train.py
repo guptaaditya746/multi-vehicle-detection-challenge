@@ -20,7 +20,7 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from ua_detrac_starter.config import config_path, load_config  # noqa: E402
+from ua_detrac_starter.config import config_path, load_config, load_yaml  # noqa: E402
 from ua_detrac_starter.tlc_compat import apply_ultralytics_83_compat  # noqa: E402
 
 
@@ -90,6 +90,35 @@ def check_umap(embedding_dim: int, reducer: str) -> None:
         )
 
 
+def latest_or_register_table(
+    tlc_module,
+    *,
+    dataset_yaml: Path,
+    project_name: str,
+    dataset_name: str,
+    table_name: str,
+    split: str,
+):
+    try:
+        return tlc_module.Table.from_names(
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name=table_name,
+        ).latest()
+    except Exception:
+        print(
+            f"  Missing {split} table revision locally; creating/reusing from YOLO..."
+        )
+        return tlc_module.Table.from_yolo(
+            dataset_yaml_file=str(dataset_yaml),
+            split=split,
+            task="detect",
+            dataset_name=dataset_name,
+            project_name=project_name,
+            table_name=table_name,
+        )
+
+
 def main() -> int:
     args = parse_args()
     os.chdir(REPO_ROOT)
@@ -99,6 +128,8 @@ def main() -> int:
     tlc_cfg = cfg.get("tlc", {})
     training = cfg.get("training", {})
     repro = cfg.get("reproducibility", {})
+    dataset_yaml = config_path(cfg, "dataset_yaml", "config/dataset.yaml")
+    _ = load_yaml(dataset_yaml)
 
     assert_yolov8n_only(training)
     reject_pretrained_config(training)
@@ -132,16 +163,22 @@ def main() -> int:
     print(f"  CUDA: {torch.cuda.is_available()}")
 
     print("\n  Loading latest table revisions...")
-    train_table = tlc.Table.from_names(
+    train_table = latest_or_register_table(
+        tlc,
+        dataset_yaml=dataset_yaml,
         project_name=project_name,
         dataset_name=dataset_name,
         table_name=train_name,
-    ).latest()
-    val_table = tlc.Table.from_names(
+        split="train",
+    )
+    val_table = latest_or_register_table(
+        tlc,
+        dataset_yaml=dataset_yaml,
         project_name=project_name,
         dataset_name=dataset_name,
         table_name=val_name,
-    ).latest()
+        split="val",
+    )
     print(f"  Train: {len(train_table)} | Val: {len(val_table)}")
 
     tables_used = config_path(cfg, "tables_used", "runs/tables_used.txt")
